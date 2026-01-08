@@ -8,24 +8,22 @@ from launch_ros.actions import Node
 from launch.substitutions import LaunchConfiguration 
 
 def generate_launch_description():
-  route_planner_config = LaunchConfiguration('route_planner_config')
+  exploration_planner_config = LaunchConfiguration('exploration_planner_config')
   world_name = LaunchConfiguration('world_name')
-  vehicleHeight = LaunchConfiguration('vehicleHeight')
+  sensorOffsetX = LaunchConfiguration('sensorOffsetX')
+  sensorOffsetY = LaunchConfiguration('sensorOffsetY')
   cameraOffsetZ = LaunchConfiguration('cameraOffsetZ')
   vehicleX = LaunchConfiguration('vehicleX')
   vehicleY = LaunchConfiguration('vehicleY')
-  terrainZ = LaunchConfiguration('terrainZ')
-  vehicleYaw = LaunchConfiguration('vehicleYaw')
   checkTerrainConn = LaunchConfiguration('checkTerrainConn')
-  
-  declare_route_planner_config = DeclareLaunchArgument('route_planner_config', default_value='indoor', description='')
-  declare_world_name = DeclareLaunchArgument('world_name', default_value='unity', description='')
-  declare_vehicleHeight = DeclareLaunchArgument('vehicleHeight', default_value='0.75', description='')
-  declare_cameraOffsetZ = DeclareLaunchArgument('cameraOffsetZ', default_value='0.1', description='')
+
+  declare_exploration_planner_config = DeclareLaunchArgument('exploration_planner_config', default_value='indoor_small', description='')
+  declare_world_name = DeclareLaunchArgument('world_name', default_value='real_world', description='')
+  declare_sensorOffsetX = DeclareLaunchArgument('sensorOffsetX', default_value='0.05', description='')
+  declare_sensorOffsetY = DeclareLaunchArgument('sensorOffsetY', default_value='0.0', description='')
+  declare_cameraOffsetZ = DeclareLaunchArgument('cameraOffsetZ', default_value='0.25', description='')
   declare_vehicleX = DeclareLaunchArgument('vehicleX', default_value='0.0', description='')
   declare_vehicleY = DeclareLaunchArgument('vehicleY', default_value='0.0', description='')
-  declare_terrainZ = DeclareLaunchArgument('terrainZ', default_value='0.0', description='')
-  declare_vehicleYaw = DeclareLaunchArgument('vehicleYaw', default_value='0.0', description='')
   declare_checkTerrainConn = DeclareLaunchArgument('checkTerrainConn', default_value='true', description='')
   
   start_local_planner = IncludeLaunchDescription(
@@ -33,7 +31,9 @@ def generate_launch_description():
       get_package_share_directory('local_planner'), 'launch', 'local_planner.launch')
     ),
     launch_arguments={
-      'realRobot': 'false',
+      'realRobot': 'true',
+      'sensorOffsetX': sensorOffsetX,
+      'sensorOffsetY': sensorOffsetY,
       'cameraOffsetZ': cameraOffsetZ,
       'goalX': vehicleX,
       'goalY': vehicleY,
@@ -54,49 +54,16 @@ def generate_launch_description():
       'checkTerrainConn': checkTerrainConn,
     }.items()
   )
-  
-  start_endpoint = Node(
-    package='ros_tcp_endpoint',
-    executable='default_server_endpoint',
-    name='endpoint',
-    # output='screen',
-    parameters=[{
-  		"ROS_IP": "0.0.0.0",
-  		"ROS_TCP_PORT": 10000,
-  		}]
-  )
-  
-  start_sim_image_repub = Node(
-    package='vehicle_simulator',
-    executable='sim_image_repub',
-    name='sim_image_repub',
-    # output='screen',
-    parameters=[{
-  		"camera_in_topic": "/camera/image/compressed",
-  		"camera_raw_out_topic": "/camera/image",
-  		"sem_in_topic": "/camera/semantic_image/compressed",
-   		"sem_raw_out_topic": "/camera/semantic_image",
-  		"depth_in_topic": "/camera/depth/compressed",
-  		"depth_raw_out_topic": "/camera/depth",
-  		}]
-  )
-
-  start_vehicle_simulator = IncludeLaunchDescription(
-    PythonLaunchDescriptionSource(os.path.join(
-      get_package_share_directory('vehicle_simulator'), 'launch', 'vehicle_simulator.launch')
-    ),
-    launch_arguments={
-      'vehicleHeight': vehicleHeight,
-      'vehicleX': vehicleX,
-      'vehicleY': vehicleY,
-      'terrainZ': terrainZ,
-      'vehicleYaw': vehicleYaw,
-    }.items()
-  )
 
   start_sensor_scan_generation = IncludeLaunchDescription(
     FrontendLaunchDescriptionSource(os.path.join(
       get_package_share_directory('sensor_scan_generation'), 'launch', 'sensor_scan_generation.launch')
+    )
+  )
+
+  start_arise_slam = IncludeLaunchDescription(
+    PythonLaunchDescriptionSource(os.path.join(
+      get_package_share_directory('arise_slam_mid360'), 'launch', 'arize_slam.launch.py')
     )
   )
 
@@ -121,36 +88,69 @@ def generate_launch_description():
   		}]
   )
 
-  start_far_planner = IncludeLaunchDescription(
+  start_tare_planner = IncludeLaunchDescription(
     PythonLaunchDescriptionSource(
-      [get_package_share_directory('far_planner'), '/launch/far_planner.launch']),
+      [get_package_share_directory('tare_planner'), '/explore_world.launch']),
     launch_arguments={
-      'config': route_planner_config,
+      'scenario': exploration_planner_config,
     }.items()
+  )
+
+  start_mid360 = IncludeLaunchDescription(
+    PythonLaunchDescriptionSource(
+      [get_package_share_directory('livox_ros_driver2'), '/launch_ROS2/msg_MID360_launch.py']),
+  )
+
+  start_scout_base = IncludeLaunchDescription(
+    PythonLaunchDescriptionSource(
+      [get_package_share_directory('scout_base'), '/launch/scout_base.launch.py']),
+  )
+
+  start_d435 = Node(
+    package='realsense2_camera',
+    executable='realsense2_camera_node',
+    name='d435_camera',
+    parameters=[{
+      'camera_name': 'D435',
+      'color_width': 1920,
+      'color_height': 1080,
+      'color_fps': 30.0,
+      'depth_width': 1280,
+      'depth_height': 720,
+      'depth_fps': 30.0,
+      'enable_color': True,
+      'enable_depth': True,
+      'enable_infra1': False,
+      'enable_infra2': False,
+      'enable_pointcloud': False,
+      'enable_sync': False,
+      'align_depth.enable': False,
+    }]
   )
 
   ld = LaunchDescription()
 
   # Add the actions
-  ld.add_action(declare_route_planner_config)
+  ld.add_action(declare_exploration_planner_config)
   ld.add_action(declare_world_name)
-  ld.add_action(declare_vehicleHeight)
+  ld.add_action(declare_sensorOffsetX)
+  ld.add_action(declare_sensorOffsetY)
   ld.add_action(declare_cameraOffsetZ)
   ld.add_action(declare_vehicleX)
   ld.add_action(declare_vehicleY)
-  ld.add_action(declare_terrainZ)
-  ld.add_action(declare_vehicleYaw)
   ld.add_action(declare_checkTerrainConn)
 
   ld.add_action(start_local_planner)
   ld.add_action(start_terrain_analysis)
   ld.add_action(start_terrain_analysis_ext)
-  ld.add_action(start_endpoint)
-  ld.add_action(start_sim_image_repub)
-  ld.add_action(start_vehicle_simulator)
   ld.add_action(start_sensor_scan_generation)
+  ld.add_action(start_arise_slam)
   ld.add_action(start_visualization_tools)
   ld.add_action(start_joy)
-  ld.add_action(start_far_planner)
+  ld.add_action(start_tare_planner)
+  ld.add_action(start_mid360)
+  ld.add_action(start_scout_base)
+  ld.add_action(start_d435)
 
   return ld
+

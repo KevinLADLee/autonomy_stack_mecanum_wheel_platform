@@ -91,6 +91,33 @@ def generate_launch_description():
       [get_package_share_directory('livox_ros_driver2'), '/launch_ROS2/msg_MID360_launch.py']),
   )
 
+  start_scout_base = IncludeLaunchDescription(
+    PythonLaunchDescriptionSource(
+      [get_package_share_directory('scout_base'), '/launch/scout_base.launch.py']),
+  )
+
+  start_d435 = Node(
+    package='realsense2_camera',
+    executable='realsense2_camera_node',
+    name='d435_camera',
+    parameters=[{
+      'camera_name': 'D435',
+      'color_width': 1920,
+      'color_height': 1080,
+      'color_fps': 30.0,
+      'depth_width': 1280,
+      'depth_height': 720,
+      'depth_fps': 30.0,
+      'enable_color': True,
+      'enable_depth': True,
+      'enable_infra1': False,
+      'enable_infra2': False,
+      'enable_pointcloud': False,
+      'enable_sync': False,
+      'align_depth.enable': False,
+    }]
+  )
+
   ld = LaunchDescription()
 
   # Add the actions
@@ -108,7 +135,9 @@ def generate_launch_description():
   ld.add_action(start_sensor_scan_generation)
   ld.add_action(start_arise_slam)
   ld.add_action(start_visualization_tools)
-  ld.add_action(start_joy)
+  #ld.add_action(start_joy)
   ld.add_action(start_mid360)
+  ld.add_action(start_scout_base)
+  ld.add_action(start_d435)
 
   return ld

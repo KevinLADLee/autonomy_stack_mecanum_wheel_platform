@@ -8,7 +8,7 @@ from launch_ros.actions import Node
 from launch.substitutions import LaunchConfiguration 
 
 def generate_launch_description():
-  exploration_planner_config = LaunchConfiguration('exploration_planner_config')
+  route_planner_config = LaunchConfiguration('route_planner_config')
   world_name = LaunchConfiguration('world_name')
   vehicleHeight = LaunchConfiguration('vehicleHeight')
   cameraOffsetZ = LaunchConfiguration('cameraOffsetZ')
@@ -18,7 +18,7 @@ def generate_launch_description():
   vehicleYaw = LaunchConfiguration('vehicleYaw')
   checkTerrainConn = LaunchConfiguration('checkTerrainConn')
   
-  declare_exploration_planner_config = DeclareLaunchArgument('exploration_planner_config', default_value='indoor_small', description='')
+  declare_route_planner_config = DeclareLaunchArgument('route_planner_config', default_value='indoor', description='')
   declare_world_name = DeclareLaunchArgument('world_name', default_value='unity', description='')
   declare_vehicleHeight = DeclareLaunchArgument('vehicleHeight', default_value='0.75', description='')
   declare_cameraOffsetZ = DeclareLaunchArgument('cameraOffsetZ', default_value='0.1', description='')
@@ -121,18 +121,45 @@ def generate_launch_description():
   		}]
   )
 
-  start_tare_planner = IncludeLaunchDescription(
+  start_far_planner = IncludeLaunchDescription(
     PythonLaunchDescriptionSource(
-      [get_package_share_directory('tare_planner'), '/explore_world.launch']),
+      [get_package_share_directory('far_planner'), '/launch/far_planner.launch']),
     launch_arguments={
-      'scenario': exploration_planner_config,
+      'config': route_planner_config,
     }.items()
+  )
+
+  start_scout_base = IncludeLaunchDescription(
+    PythonLaunchDescriptionSource(
+      [get_package_share_directory('scout_base'), '/launch/scout_base.launch.py']),
+  )
+
+  start_d435 = Node(
+    package='realsense2_camera',
+    executable='realsense2_camera_node',
+    name='d435_camera',
+    parameters=[{
+      'camera_name': 'D435',
+      'color_width': 1920,
+      'color_height': 1080,
+      'color_fps': 30.0,
+      'depth_width': 1280,
+      'depth_height': 720,
+      'depth_fps': 30.0,
+      'enable_color': True,
+      'enable_depth': True,
+      'enable_infra1': False,
+      'enable_infra2': False,
+      'enable_pointcloud': False,
+      'enable_sync': False,
+      'align_depth.enable': False,
+    }]
   )
 
   ld = LaunchDescription()
 
   # Add the actions
-  ld.add_action(declare_exploration_planner_config)
+  ld.add_action(declare_route_planner_config)
   ld.add_action(declare_world_name)
   ld.add_action(declare_vehicleHeight)
   ld.add_action(declare_cameraOffsetZ)
@@ -151,6 +178,8 @@ def generate_launch_description():
   ld.add_action(start_sensor_scan_generation)
   ld.add_action(start_visualization_tools)
   ld.add_action(start_joy)
-  ld.add_action(start_tare_planner)
+  ld.add_action(start_far_planner)
+  ld.add_action(start_scout_base)
+  ld.add_action(start_d435)
 
   return ld
